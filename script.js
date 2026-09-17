@@ -66,11 +66,62 @@
   toggle.addEventListener('click',()=>setMenu(!menu.classList.contains('open')));
   menu.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>setMenu(false)));
 
-  // Reveal observer
+  // Scroll reveal + subtle stagger for a more editorial, premium feel.
+  const revealItems=[...document.querySelectorAll('.reveal')];
+  revealItems.forEach((el,i)=>{
+    const parent=el.parentElement;
+    if(parent && (parent.classList.contains('stats-grid') || parent.classList.contains('program-list') || parent.classList.contains('coach-grid') || parent.classList.contains('facility-stack') || parent.classList.contains('plan-grid'))){
+      const siblings=[...parent.querySelectorAll(':scope > .reveal')];
+      const index=siblings.indexOf(el);
+      el.dataset.delay=Math.min(index,3);
+    }
+  });
   const revealObserver=new IntersectionObserver(entries=>{
-    entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('visible');revealObserver.unobserve(entry.target)}})
-  },{threshold:.12,rootMargin:'0px 0px -40px'});
-  document.querySelectorAll('.reveal').forEach(el=>revealObserver.observe(el));
+    entries.forEach(entry=>{
+      if(entry.isIntersecting){
+        entry.target.classList.add('visible');
+        revealObserver.unobserve(entry.target);
+      }
+    });
+  },{threshold:.12,rootMargin:'0px 0px -50px'});
+  revealItems.forEach(el=>revealObserver.observe(el));
+
+  // Scroll progress + restrained hero parallax.
+  const motionOK=!matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let ticking=false;
+  const updateScrollEffects=()=>{
+    const max=Math.max(1,document.documentElement.scrollHeight-innerHeight);
+    document.documentElement.style.setProperty('--scroll-progress',(scrollY/max).toFixed(4));
+    if(motionOK){
+      const hero=document.querySelector('.hero-media');
+      if(hero && scrollY < innerHeight*1.15){
+        hero.style.transform=`translate3d(0,${Math.min(scrollY*.055,38)}px,0) scale(${1.04+Math.min(scrollY/innerHeight*.015,.015)})`;
+      }
+    }
+    ticking=false;
+  };
+  addEventListener('scroll',()=>{if(!ticking){requestAnimationFrame(updateScrollEffects);ticking=true}},{passive:true});
+  updateScrollEffects();
+
+  // Lightweight stat count-up when the stats enter the viewport.
+  const statNumbers=[...document.querySelectorAll('.stat-num[data-count]')];
+  const countObserver=new IntersectionObserver(entries=>{
+    entries.forEach(entry=>{
+      if(!entry.isIntersecting)return;
+      const el=entry.target, raw=el.dataset.count, match=raw.match(/([\d,]+)(.*)/);
+      if(!match){countObserver.unobserve(el);return;}
+      const target=Number(match[1].replace(/,/g,'')), suffix=match[2]||'';
+      const start=performance.now(), duration=900;
+      const tick=(now)=>{
+        const progress=Math.min(1,(now-start)/duration), eased=1-Math.pow(1-progress,3);
+        el.textContent=Math.round(target*eased).toLocaleString('en-IN')+suffix;
+        if(progress<1)requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      countObserver.unobserve(el);
+    });
+  },{threshold:.65});
+  statNumbers.forEach(el=>countObserver.observe(el));
 
   // Conversion events: easy to swap for GA4, Plausible, PostHog etc.
   function track(name, props={}){
